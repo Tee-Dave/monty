@@ -1,124 +1,58 @@
 #include "monty.h"
+#define BUFSIZE 64
 
-global_t s;
-
-/**
- * get_op_func - gets the function associated to an opcode
- * @opcode: the opcode
- * @line: line number
- *
- * Return: function of opcode
- */
-void (*get_op_func(char *opcode, unsigned int line))(stack_t **, unsigned int)
-{
-	instruction_t ops[] = {
-		{"push", op_push}, {"pall", op_pall}, {"mul", op_mul},
-		{"pint", op_pint}, {"pop", op_pop}, {"div", op_div},
-		{"swap", op_swap}, {"add", op_add}, {"mod", op_mod},
-		{"nop", op_nop}, {"sub", op_sub}, {"pchar", op_pchar},
-		{"pstr", op_pstr}, {"rotl", op_rotl}, {"rotr", op_rotr},
-		{"stack", op_stack}, {"queue", op_queue}, {NULL, NULL}
-	};
-	int i, cmp;
-
-	for (i = 0; ops[i].opcode; i++)
-	{
-		cmp = strcmp(opcode, ops[i].opcode);
-		if (cmp == 0)
-			return (ops[i].f);
-	}
-
-	fprintf(stderr, "L%d: unknown instruction %s\n", line, opcode);
-	exit(EXIT_FAILURE);
-}
+char *operand;
 
 /**
- * set_global - sets the global structure
- * @filename: file
- * @st: stack
- * @num: number
- * @buff: buffer
- * @stk: stack or queue
- *
- * Return: void
+ * main - monty interpreter
+ * @argc: int
+ * @argv: list of arguments
+ * Return: nothing
  */
-void set_global(FILE *filename, stack_t *st, char *num, char *buff, int stk)
+int main(int argc, char const *argv[])
 {
-	s.file = filename;
-	s.stack = st;
-	s.is_stack = stk;
-	s.number = num;
-	s.buf = buff;
-}
+	line_t *lines;
+	char **line;
+	int line_number;
+	stack_t *stack;
+	char *content;
+	void (*func)(stack_t**, unsigned int);
 
-/**
- * read_file - reads the file and carry out commands
- * @path: file path to read
- * @stack: the stack
- *
- * Return: void
- */
-void read_file(char *path, stack_t *stack)
-{
-	FILE *file;
-	char *r, *command, *value;
-	unsigned int line = 0;
-	void (*op_func)(stack_t **stack, unsigned int line_number);
+	stack = NULL;
 
-	file = fopen(path, "r");
-	if (!file)
-	{
-		fprintf(stderr, "Error: Can't open file %s\n", path);
-		exit(EXIT_FAILURE);
-	}
-
-	set_global(file, stack, NULL, NULL, 1);
-
-	while (1)
-	{
-		line++;
-		s.buf = malloc(sizeof(char) * SIZE);
-		if (!s.buf)
-		{
-			fprintf(stderr, "Error: malloc failed\n");
-			exit(EXIT_FAILURE);
-		}
-
-		r = fgets(s.buf, SIZE, s.file);
-		if (!r)
-			break;
-
-		command = strtok(s.buf, " \t\n");
-		value = strtok(NULL, " \t\n");
-		if (command && command[0] != '#')
-		{
-			op_func = get_op_func(command, line);
-			s.number = value;
-			op_func(&s.stack, line);
-		}
-		free(s.buf);
-	}
-	free_global();
-}
-
-/**
- * main - monty intepreter
- * @argc: argument count
- * @argv: argument vector
- *
- * Return: always 0
- */
-int main(int argc, char **argv)
-{
-	stack_t *stack = NULL;
-
-	if (argc != 2)
+	if (argc == 1)
 	{
 		fprintf(stderr, "USAGE: monty file\n");
 		exit(EXIT_FAILURE);
 	}
+	lines = textfile_to_array(argv[1]);
+	if (lines == NULL)
+		return (0);
 
-	read_file(argv[1], stack);
+	line_number = 0;
+	while ((lines + line_number)->content != NULL)
+	{
+		content = (lines + line_number)->content;
+		line = split_line(content);
+		operand = line[1];
 
+		func = get_op_func(line[0]);
+		if (func == NULL)
+		{
+			/*TODO: Refactor: Edit more efifcient way to free memory on exit*/
+			fprintf(stderr, "L%d: unknown instruction %s\n", line_number + 1, line[0]);
+			free(line);
+			free_stack(stack);
+			free_lines(lines);
+			exit(EXIT_FAILURE);
+		}
+
+		func(&stack, line_number + 1);
+		free(line);
+		line_number++;
+	}
+
+	free_stack(stack);
+	free_lines(lines);
 	return (0);
 }
